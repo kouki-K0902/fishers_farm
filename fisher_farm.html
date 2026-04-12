@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Fisher's Farm: Data Science Lab</title>
+    
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
+
+    <style>
+        :root { --primary-color: #2c3e50; --accent-color: #3498db; --bg-color: #f4f7f9; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-color); margin: 0; padding: 20px; }
+        #main-container { display: flex; flex-direction: column; gap: 20px; max-width: 1400px; margin: 0 auto; min-height: 95vh; }
+        
+        /* 上部エリア（エディタと農園マップ） */
+        #top-section { display: flex; gap: 20px; }
+        .left-side { flex: 1.2; display: flex; flex-direction: column; }
+        .right-side { flex: 0.8; display: flex; flex-direction: column; gap: 15px; }
+
+        .tab-container { display: flex; }
+        .tab { padding: 12px 25px; cursor: pointer; background: #cfd8dc; border-radius: 10px 10px 0 0; margin-right: 5px; font-weight: bold; color: #546e7a; transition: 0.3s; }
+        .tab.active { background: #282c34; color: #61afef; }
+        .editor-wrapper { background: #282c34; border-radius: 0 10px 10px 10px; padding: 10px; flex-grow: 1; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .CodeMirror { height: 500px; font-family: 'Fira Code', monospace; font-size: 14px; border-radius: 5px; }
+
+        .panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); position: relative; }
+
+        #farm-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; border: 4px solid var(--primary-color); background: #bdc3c7; width: 400px; margin: 0 auto; position: relative; }
+        .cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; position: relative; font-size: 18px; cursor: help; }
+        .sunny { background-color: #fffde7; }
+        .shady { background-color: #e0e0e0; }
+        .water-edge::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 6px; background: #29b6f6; opacity: 0.7; }
+        .yield-val { font-size: 10px; color: #e67e22; margin-top: 2px; }
+
+        .cell .tooltip { visibility: hidden; width: 160px; background-color: rgba(44, 62, 80, 0.98); color: #fff; text-align: left; padding: 10px; border-radius: 6px; position: absolute; z-index: 9999; opacity: 0; transition: opacity 0.2s; font-size: 11px; line-height: 1.4; pointer-events: none; }
+        .cell .tooltip.top { bottom: 115%; left: 50%; margin-left: -80px; }
+        .cell .tooltip.bottom { top: 115%; left: 50%; margin-left: -80px; }
+        .cell:hover { z-index: 100; } 
+        .cell:hover .tooltip { visibility: visible; opacity: 1; }
+
+        .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+        button { flex: 1; min-width: 120px; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
+        .btn-plant { background: #4caf50; }
+        .btn-harvest { background: #ff9800; }
+        .btn-analyze { background: #2196f3; }
+        .btn-csv { background: #607d8b; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+
+        #console { background: #21252b; color: #98c379; padding: 15px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 13px; min-height: 100px; white-space: pre-wrap; margin-top: 10px; }
+        
+        /* グラフエリア（下部中央寄せ） */
+        #plot-section { display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 20px; }
+        #plot-area { width: 100%; max-width: 900px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        .plot-item { border: 2px solid #ecf0f1; border-radius: 8px; background: white; overflow: hidden; width: 100%; }
+        .plot-actions { background: #f8f9fa; padding: 10px; border-bottom: 1px solid #eee; display: flex; gap: 10px; align-items: center; justify-content: center; }
+        .plot-btn-del { background: #e74c3c !important; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; flex: 0 0 auto; min-width: auto; }
+        .plot-btn-save { background: #34495e !important; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; flex: 0 0 auto; min-width: auto; }
+        .plot-item img { max-width: 100%; display: block; height: auto; margin: 0 auto; padding: 10px; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="main-container">
+    <div id="top-section">
+        <div class="left-side">
+            <div class="tab-container">
+                <div id="tab-plant" class="tab active" onclick="switchTab('plant')">🌱 1. 実験計画</div>
+                <div id="tab-analyze" class="tab" onclick="switchTab('analyze')">📊 2. データ分析</div>
+            </div>
+            
+            <div class="editor-wrapper">
+                <div id="editor-plant-box">
+                    <textarea id="code-plant">
+# --- 植え付けフェーズ ---
+import numpy as np
+
+for y in range(8):
+    for x in range(8):
+        # 戦略を記述
+        farm[y][x].variety = np.random.choice(['A', 'B', 'C'])
+                    </textarea>
+                </div>
+                <div id="editor-analyze-box" class="hidden">
+                    <textarea id="code-analyze">
+# --- 分析フェーズ ---
+import matplotlib.pyplot as plt
+import numpy as np
+
+data = { v: [p.yield_val for row in farm for p in row if p.variety == v] for v in ['A', 'B', 'C'] }
+
+print("【統計レポート】")
+for v in ['A', 'B', 'C']:
+    if data[v]: print(f"品種{v} 平均収量: {np.mean(data[v]):.2f}")
+
+plt.figure(figsize=(6, 4))
+plt.boxplot([data[v] for v in ['A', 'B', 'C'] if data[v]], labels=[v for v in ['A', 'B', 'C'] if data[v]])
+plt.ylabel("Yield")
+plt.title("Yield Analysis")
+plt.show()
+                    </textarea>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="plant-btn" class="btn-plant" onclick="executePlanting()" disabled>植え付け実行</button>
+                <button id="harvest-btn" class="btn-harvest" onclick="executeHarvest()" disabled>収穫シミュレーション</button>
+                <button id="csv-btn" class="btn-csv hidden" onclick="downloadCSV()">CSV保存</button>
+                <button id="analyze-btn" class="btn-analyze hidden" onclick="executeAnalysis()">分析実行</button>
+            </div>
+        </div>
+
+        <div class="right-side">
+            <div class="panel">
+                <h3 style="margin-top:0">Farm Field Map</h3>
+                <div id="farm-grid"></div>
+                <div id="console">Loading System...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="plot-section">
+        <h3 style="margin-top:0">Data Visualization</h3>
+        <div id="plot-area"></div>
+    </div>
+</div>
+
+<script src = 'script.js'>
+
+</script>
+</body>
+</html>
