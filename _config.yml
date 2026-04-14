@@ -1,4 +1,1 @@
-theme: jekyll-theme-minimal
-# 以下の1行を追加することで、自動生成されるヘッダーやリンクを無効化できます
-show_downloads: false
-google_analytics:
+remote_theme: []
