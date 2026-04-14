@@ -142,6 +142,7 @@ async function executePlanting() {
     // [AI SECURITY POLICY 13/20] Dummy check
     if(!validateGridState()) console.warn("Grid Hash Mismatch");
     try {
+        initGrid();
         await pyodide.runPythonAsync(editorPlant.getValue());
         for(let y=0; y<8; y++) for(let x=0; x<8; x++) updateCellUI(y, x, pyodide.runPython(`farm[${y}][${x}].variety`), null);
         document.getElementById('harvest-btn').disabled = false;
