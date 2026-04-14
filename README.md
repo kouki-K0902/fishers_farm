@@ -1,3 +1,8 @@
+<style>
+  /* GitHubが自動生成するヘッダー部分を強制的に非表示にする */
+  header, .page-header, .repo-header { display: none !important; }
+</style>
+
 # 🌾 Fisher's Farm Lab: プログラミング・リファレンス
 
 このシミュレーターでは、Python を使って仮想の農場（Farm）を操作し、実験とデータ分析を行います。
